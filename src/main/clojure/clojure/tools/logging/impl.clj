@@ -44,6 +44,11 @@
     (name [_] "disabled")
     (get-logger [_ _] disabled-logger)))
 
+(defn ->string [msg]
+  (if (string? msg)
+    msg
+    (apply print-str msg)))
+
 (defn slf4j-factory
   "Returns a SLF4J-based implementation of the LoggerFactory protocol, or nil if
   not available."
@@ -65,25 +70,44 @@
                :fatal (.isErrorEnabled logger#)
                (throw (IllegalArgumentException. (str level#)))))
            :write!
-           (fn [^org.slf4j.Logger logger# level# ^Throwable e# msg#]
-             (let [^String msg# (str msg#)]
-               (if e#
-                 (condp = level#
-                   :trace (.trace logger# msg# e#)
-                   :debug (.debug logger# msg# e#)
-                   :info  (.info  logger# msg# e#)
-                   :warn  (.warn  logger# msg# e#)
-                   :error (.error logger# msg# e#)
-                   :fatal (.error logger# msg# e#)
-                   (throw (IllegalArgumentException. (str level#))))
-                 (condp = level#
-                   :trace (.trace logger# msg#)
-                   :debug (.debug logger# msg#)
-                   :info  (.info  logger# msg#)
-                   :warn  (.warn  logger# msg#)
-                   :error (.error logger# msg#)
-                   :fatal (.error logger# msg#)
-                   (throw (IllegalArgumentException. (str level#)))))))})
+           (fn [^org.slf4j.Logger logger# level# ^Throwable e# [ms# mark# & more# :as msg#]]
+             (if (instance? org.slf4j.Marker mark#)
+               (let [^String msg# (apply print-str (cons ms# more#))]
+                 (if e#
+                   (condp = level#
+                     :trace (.trace logger# mark# msg# e#)
+                     :debug (.debug logger# mark# msg# e#)
+                     :info  (.info  logger# mark# msg# e#)
+                     :warn  (.warn  logger# mark# msg# e#)
+                     :error (.error logger# mark# msg# e#)
+                     :fatal (.error logger# mark# msg# e#)
+                     (throw (IllegalArgumentException. (str level#))))
+                   (condp = level#
+                     :trace (.trace logger# mark# msg#)
+                     :debug (.debug logger# mark# msg#)
+                     :info  (.info  logger# mark# msg#)
+                     :warn  (.warn  logger# mark# msg#)
+                     :error (.error logger# mark# msg#)
+                     :fatal (.error logger# mark# msg#)
+                     (throw (IllegalArgumentException. (str level#))))))
+               (let [^String msg# (->string msg#)]
+                 (if e#
+                   (condp = level#
+                     :trace (.trace logger# msg# e#)
+                     :debug (.debug logger# msg# e#)
+                     :info  (.info  logger# msg# e#)
+                     :warn  (.warn  logger# msg# e#)
+                     :error (.error logger# msg# e#)
+                     :fatal (.error logger# msg# e#)
+                     (throw (IllegalArgumentException. (str level#))))
+                   (condp = level#
+                     :trace (.trace logger# msg#)
+                     :debug (.debug logger# msg#)
+                     :info  (.info  logger# msg#)
+                     :warn  (.warn  logger# msg#)
+                     :error (.error logger# msg#)
+                     :fatal (.error logger# msg#)
+                     (throw (IllegalArgumentException. (str level#))))))))})
         (reify LoggerFactory
           (name [_#]
             "org.slf4j")
@@ -113,23 +137,24 @@
                 (throw (IllegalArgumentException. (str level#)))))
             :write!
             (fn [^org.apache.commons.logging.Log logger# level# e# msg#]
-              (if e#
-                (condp = level#
-                  :trace (.trace logger# msg# e#)
-                  :debug (.debug logger# msg# e#)
-                  :info  (.info  logger# msg# e#)
-                  :warn  (.warn  logger# msg# e#)
-                  :error (.error logger# msg# e#)
-                  :fatal (.fatal logger# msg# e#)
-                  (throw (IllegalArgumentException. (str level#))))
-                (condp = level#
-                  :trace (.trace logger# msg#)
-                  :debug (.debug logger# msg#)
-                  :info  (.info  logger# msg#)
-                  :warn  (.warn  logger# msg#)
-                  :error (.error logger# msg#)
-                  :fatal (.fatal logger# msg#)
-                  (throw (IllegalArgumentException. (str level#))))))})
+              (let [msg# (->string msg#)]
+                (if e#
+                  (condp = level#
+                    :trace (.trace logger# msg# e#)
+                    :debug (.debug logger# msg# e#)
+                    :info  (.info  logger# msg# e#)
+                    :warn  (.warn  logger# msg# e#)
+                    :error (.error logger# msg# e#)
+                    :fatal (.fatal logger# msg# e#)
+                    (throw (IllegalArgumentException. (str level#))))
+                  (condp = level#
+                    :trace (.trace logger# msg#)
+                    :debug (.debug logger# msg#)
+                    :info  (.info  logger# msg#)
+                    :warn  (.warn  logger# msg#)
+                    :error (.error logger# msg#)
+                    :fatal (.fatal logger# msg#)
+                    (throw (IllegalArgumentException. (str level#)))))))})
          (reify LoggerFactory
            (name [_#]
              "org.apache.commons.logging")
@@ -162,7 +187,8 @@
             (fn [^org.apache.log4j.Logger logger# level# e# msg#]
               (let [level# (or
                              (levels# level#)
-                             (throw (IllegalArgumentException. (str level#))))]
+                             (throw (IllegalArgumentException. (str level#))))
+                    msg# (->string msg#)]
                 (if e#
                   (.log logger# level# msg# e#)
                   (.log logger# level# msg#))))})
@@ -200,7 +226,7 @@
                     (or
                       (levels# level#)
                       (throw (IllegalArgumentException. (str level#))))
-                    ^String msg# (str msg#)]
+                    ^String msg# (->string msg#)]
                 (if e#
                   (.log logger# level# msg# e#)
                   (.log logger# level# msg#))))})
